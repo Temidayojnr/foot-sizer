@@ -120,6 +120,57 @@ class FootSizerController extends Controller
         Log::info("Record written to daily CSV: $csvPath");
     }
 
+    public function getAllFootSizeRecords()
+    {
+        $records = Child::orderBy('created_at', 'desc')->get();
+
+        return response()->json($records);
+    }
+
+    public function analytics()
+    {
+        $records = Child::all();
+
+        $totalChildren = $records->count();
+        $averageAge = $records->avg('age');
+        $averageShoeSize = $records->avg('shoe_size');
+        $averageFootSizeCm = $records->avg('foot_size_cm');
+
+        // Calculate priority based on age and shoe size
+        $priorities = $records->map(function ($record) {
+            return [
+                'name' => $record->name,
+                'age' => $record->age,
+                'shoe_size' => $record->shoe_size,
+                'priority' => $this->calculatePriority($record->age, $record->shoe_size),
+            ];
+        })->sortByDesc('priority');
+
+        // Additional analytics data
+        $minAge = $records->min('age');
+        $maxAge = $records->max('age');
+        $minShoeSize = $records->min('shoe_size');
+        $maxShoeSize = $records->max('shoe_size');
+        $minFootSizeCm = $records->min('foot_size_cm');
+        $maxFootSizeCm = $records->max('foot_size_cm');
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Shoa a Child foundation shoe sizing initiative.',
+            'total_foot_size_recorded' => $totalChildren,
+            'average_age' => round($averageAge, 2),
+            'average_shoe_size' => round($averageShoeSize, 2),
+            'average_foot_size_cm' => round($averageFootSizeCm, 2),
+            'min_age' => $minAge,
+            'max_age' => $maxAge,
+            'min_shoe_size' => $minShoeSize,
+            'max_shoe_size' => $maxShoeSize,
+            'min_foot_size_cm' => $minFootSizeCm,
+            'max_foot_size_cm' => $maxFootSizeCm,
+            'priorities' => $priorities,
+        ]);
+    }
+
     private function convertToShoeSize($cm)
     {
         return round(($cm + 1.5) * 1.5);
