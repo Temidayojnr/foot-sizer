@@ -1,0 +1,105 @@
+Using Technology to Streamline Shoe Distribution for Children: The Foot Sizer App for Shoe A Child Foundation
+1. Introduction
+Shoe A Child Foundation is committed to providing footwear to underprivileged children across Nigeria and beyond. As part of our mission, we conduct regular outreach programs, often fitting and distributing shoes to hundreds of children in a single day. However, the manual process of measuring foot sizes and matching them with available shoes is often slow, inaccurate, and resource-intensive.
+
+As the IT Lead volunteering for the Foundation, I identified a need for a more efficient solution to aid our distribution process. This paper presents the design, development, and deployment of a lightweight, AI-assisted web application that automates foot measurement using smartphone cameras. The system not only records and stores each child's foot data but also calculates appropriate Nigerian shoe sizes and helps prioritize shoe distribution during outreach events.
+
+2. Problem Statement
+Traditional manual shoe sizing:
+
+Delays the outreach workflow.
+
+Often leads to fitting errors, resulting in returns or wasted shoe stock.
+
+Is not scalable for larger outreaches (200+ children).
+
+Does not provide historical or analytical data on foot sizes, ages, and distribution needs.
+
+3. Objectives
+Build a lightweight system that can measure a child’s foot from an uploaded photo.
+
+Automatically calculate Nigerian shoe sizes using measured foot length in centimeters.
+
+Record each child’s name, age, and foot/shoe size for reporting and tracking.
+
+Provide real-time and historical analytics on children measured.
+
+Help the foundation prioritize shoe distribution based on need.
+
+4. Technical Architecture
+Frontend & User Flow
+A simple form where a volunteer can input a child’s name, age, and upload a photo of their foot.
+
+Once submitted, the image is processed, and the results (shoe size, foot size in cm) are displayed.
+
+Backend (Laravel PHP Framework)
+Accepts image uploads and metadata.
+
+Sends the image to a Python Flask API running MediaPipe or TensorFlow for foot measurement.
+
+Converts measured length to Nigerian shoe size using the formula: shoe_size = round((cm * 1.5) + 1.5).
+
+Saves data to a children table and writes each record to a CSV file for reporting.
+
+Python API (MediaPipe/TensorFlow)
+Processes foot images.
+
+Detects toe and heel points to calculate foot length in cm.
+
+Returns foot size back to the Laravel backend.
+
+5. Key Features
+📏 AI-based Foot Measurement: No ruler or credit card required—just a clear photo.
+
+🧒 Child Profile Storage: Each child’s record is stored and accessible for future visits.
+
+📊 Analytics Dashboard: Provides average foot sizes, age distributions, and priority lists.
+
+⚙️ CSV Reporting: Daily reports are auto-generated and saved for administrative or donor use.
+
+🔒 Security: Uses password protection for admin views and secure image handling.
+
+6. Impact
+Before:
+5–7 minutes per child to measure and fit.
+
+No record of past distributions.
+
+Frequent mismatches due to rushed sizing.
+
+After:
+45–60 seconds per child on average.
+
+Instant measurement and sizing.
+
+Reliable digital records.
+
+Prioritized lists help ensure the most in-need children are served first.
+
+7. Lessons Learned
+Clean image quality is essential; user education is needed for better image uploads.
+
+Offline fallback (e.g., CSV download capability) is important in remote areas with poor internet.
+
+A future version should include multilingual instructions and size recommendations for various shoe types.
+
+8. Future Plans
+Add multi-photo processing to improve accuracy.
+
+Integrate barcode scanning for shoes and match sizes in real-time.
+
+Enable community health data collection alongside shoe sizing.
+
+Launch a mobile-first PWA version for use in very remote areas.
+
+9. Conclusion
+By combining open-source AI technologies with Laravel's simplicity and robustness, we were able to create a system that dramatically improves how Shoe A Child Foundation performs its mission. This is a demonstration of how even small-scale, volunteer-driven tech projects can make a measurable impact in humanitarian outreach.
+
+10. Acknowledgements
+Special thanks to:
+
+The Shoe A Child Foundation team for trusting this vision.
+
+The open-source community for providing tools like Laravel, MediaPipe, and TailwindCSS.
+
+The volunteers who tested early versions during outreach events.
