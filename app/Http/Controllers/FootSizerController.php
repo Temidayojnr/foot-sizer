@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\Process;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\Process\Exception\ProcessFailedException;
+use Illuminate\Support\Facades\Http;
 
 class FootSizerController extends Controller
 {
@@ -31,45 +32,36 @@ class FootSizerController extends Controller
         $photo = $request->file('photo_path');
         Log::info('Photo received: ' . $photo->getClientOriginalName());
 
-        // Store image
-        $path = $photo->store('public/foot_photos');
-        $imagePath = storage_path('app/' . $path);
-        Log::info('Photo stored at: ' . $imagePath);
-
-        // Run Python script
-        $python = 'python3'; // or 'python'
-        $scriptPath = base_path('foot_detect.py');
-        Log::info("Running Python script at $scriptPath");
-
         try {
-            $process = new Process([$python, $scriptPath, $imagePath]);
-            $process->run();
+            // Store image
+            $path = $photo->store('public/foot_photos');
+            $imagePath = storage_path('app/' . $path);
+            Log::info('Photo stored at: ' . $imagePath);
 
-            $outputRaw = $process->getOutput();
-            $errorRaw = $process->getErrorOutput();
+            // Send image to Flask API
+            $flaskUrl = rtrim(env('FOOT_MEASURE_API_URL'), '/') . '/measure-foot';
+            Log::info("Calling Flask API: $flaskUrl");
 
-            Log::info('Python script stdout: ' . $outputRaw);
-            Log::info('Python script stderr: ' . $errorRaw);
+            $response = Http::timeout(15)
+                ->attach('image', file_get_contents($imagePath), basename($imagePath))
+                ->post($flaskUrl);
 
-            if (!$process->isSuccessful()) {
-                Log::error('Python script failed with error: ' . $process->getErrorOutput());
-                throw new ProcessFailedException($process);
+            if (!$response->successful()) {
+                Log::error("Flask API failed: " . $response->body());
+                throw new \Exception("Flask API failed");
             }
 
-            $outputRaw = $process->getOutput();
-            Log::info('Python script output: ' . $outputRaw);
+            $data = $response->json();
+            Log::info("Flask API response: " . json_encode($data));
 
-            $output = json_decode($outputRaw, true);
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                Log::error('JSON decode error: ' . json_last_error_msg());
-                throw new \Exception('Invalid JSON output from Python script.');
+            $footSize = $data['foot_size_cm'] ?? null;
+            if (!$footSize) {
+                Log::error("No foot size returned from Flask API.");
+                throw new \Exception("Foot size not returned");
             }
-
-            $footSize = $output['foot_size_cm'] ?? null;
-            Log::info('Foot size extracted: ' . $footSize);
 
             $nigerianSize = round(($footSize * 1.5) + 1.5);
-            Log::info('Nigerian shoe size: ' . $nigerianSize);
+            Log::info("Calculated Nigerian shoe size: $nigerianSize");
 
             // Save to DB
             $record = Child::create([
@@ -79,7 +71,7 @@ class FootSizerController extends Controller
                 'shoe_size' => $nigerianSize,
                 'foot_size_cm' => $footSize,
             ]);
-            Log::info('Record saved to DB with ID: ' . $record->id);
+            Log::info("Record saved to DB with ID: {$record->id}");
 
             $this->writeRecordToCsv($record);
 
@@ -92,7 +84,7 @@ class FootSizerController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Error in foot size process: ' . $e->getMessage());
-            return response()->json(['error' => 'Load Failed'], 500);
+            return response()->json(['error' => 'Processing failed. Please try again later.'], 500);
         }
     }
 
