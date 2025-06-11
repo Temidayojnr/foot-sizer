@@ -74,7 +74,7 @@
     }
     </script>
 
-    <script>
+    {{-- <script>
         document.getElementById('footForm').addEventListener('submit', async function (e) {
             e.preventDefault();
 
@@ -114,6 +114,61 @@
             document.getElementById('footForm').reset();
             document.getElementById('result').innerHTML = '';
         });
-    </script>
+    </script> --}}
+
+    <script>
+    document.getElementById('footForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+
+        const form = e.target;
+        const formData = new FormData(form);
+        const resultDiv = document.getElementById('result');
+        const file = formData.get('photo_path');
+
+        // Validate file input
+        if (!file || file.size === 0) {
+            resultDiv.innerHTML = `<p class="text-red-500 font-semibold">⚠️ Please upload a valid foot photo before submitting.</p>`;
+            return;
+        }
+
+        resultDiv.innerHTML = '<p class="text-blue-600 font-medium animate-pulse">Processing...</p>';
+
+        try {
+            const response = await fetch(form.action || "{{ route('measure.foot') }}", {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                }
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.foot_size_cm) {
+                resultDiv.innerHTML = `
+                    <div class="bg-green-50 border border-green-200 rounded-xl p-6 shadow-md max-w-md mx-auto">
+                        <h3 class="text-lg font-bold text-green-800 mb-2">✅ Measurement Result</h3>
+                        <p><strong>Name:</strong> ${result.name}</p>
+                        <p><strong>Age:</strong> ${result.age}</p>
+                        <p><strong>Foot Length:</strong> ${result.foot_size_cm} cm</p>
+                        <p><strong>Shoe Size:</strong> Size ${result.shoe_size}</p>
+                        <img src="${result.photo_url}" alt="Uploaded Foot Image" class="mt-4 mx-auto rounded-xl shadow-md max-w-full">
+                    </div>
+                `;
+            } else {
+                resultDiv.innerHTML = `<p class="text-red-500 font-semibold">❌ Failed to measure foot size. ${result?.message ?? 'Please try again.'}</p>`;
+            }
+        } catch (error) {
+            console.error("Measurement error:", error);
+            resultDiv.innerHTML = `<p class="text-red-500 font-semibold">⚠️ An error occurred: ${error.message}</p>`;
+        }
+    });
+
+    document.getElementById('clearButton').addEventListener('click', function () {
+        document.getElementById('footForm').reset();
+        document.getElementById('result').innerHTML = '';
+    });
+</script>
+
 </body>
 </html>
