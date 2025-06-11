@@ -134,7 +134,7 @@
         resultDiv.innerHTML = '<p class="text-blue-600 font-medium animate-pulse">Processing...</p>';
 
         try {
-            const response = await fetch(form.action || "{{ route('measure.foot') }}", {
+            const response = await fetch(form.action || "{{ route('foot-sizer.process') }}", {
                 method: 'POST',
                 body: formData,
                 headers: {
