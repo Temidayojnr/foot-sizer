@@ -40,7 +40,8 @@ class FootSizerController extends Controller
 
             // Send image to SIZE APP
             $flaskUrl = rtrim(env('FOOT_MEASURE_API_URL'), '/') . '/measure-foot';
-            Log::info("Calling SIZE APP: $flaskUrl. Name: " . $request->name);
+            // Log::info("Calling SIZE APP: $flaskUrl. Name: " . $request->name);
+            Log::info("Calling SIZE APP with URL: $flaskUrl and image: " . basename($imagePath) . '. Name: ' . $request->name);
 
             $response = Http::timeout(15)
                 ->attach('image', file_get_contents($imagePath), basename($imagePath))
