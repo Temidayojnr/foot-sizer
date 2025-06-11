@@ -152,7 +152,6 @@
                         <p><strong>Age:</strong> ${result.age}</p>
                         <p><strong>Foot Length:</strong> ${result.foot_size_cm} cm</p>
                         <p><strong>Shoe Size:</strong> Size ${result.shoe_size}</p>
-                        <img src="${result.photo_url}" alt="Uploaded Foot Image" class="mt-4 mx-auto rounded-xl shadow-md max-w-full">
                     </div>
                 `;
             } else {

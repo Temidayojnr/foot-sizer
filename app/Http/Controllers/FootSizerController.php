@@ -5,9 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Child;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Symfony\Component\Process\Process;
-use Illuminate\Support\Facades\Storage;
-use Symfony\Component\Process\Exception\ProcessFailedException;
 use Illuminate\Support\Facades\Http;
 
 class FootSizerController extends Controller
@@ -15,6 +12,51 @@ class FootSizerController extends Controller
     public function index()
     {
         return view('welcome');
+    }
+
+    private function compressImage($sourcePath, $destinationPath, $quality = 60)
+    {
+        $info = getimagesize($sourcePath);
+        if (!$info) {
+            throw new \Exception("Cannot read image info. File may be corrupted.");
+        }
+
+        $mime = $info['mime'];
+
+        switch ($mime) {
+            case 'image/jpeg':
+            case 'image/jpg':
+                $image = imagecreatefromjpeg($sourcePath);
+                imagejpeg($image, $destinationPath, $quality);
+                break;
+
+            case 'image/png':
+                $image = imagecreatefrompng($sourcePath);
+                // Convert PNG to JPEG with white background to preserve quality
+                $bg = imagecreatetruecolor(imagesx($image), imagesy($image));
+                imagefill($bg, 0, 0, imagecolorallocate($bg, 255, 255, 255));
+                imagecopy($bg, $image, 0, 0, 0, 0, imagesx($image), imagesy($image));
+                imagejpeg($bg, $destinationPath, $quality);
+                imagedestroy($bg);
+                break;
+
+            case 'image/webp':
+                $image = imagecreatefromwebp($sourcePath);
+                imagewebp($image, $destinationPath, $quality);
+                break;
+
+            case 'image/heic':
+            case 'image/heif':
+                throw new \Exception("HEIC/HEIF images are not supported by PHP GD. Please convert to JPG or PNG.");
+                break;
+
+            default:
+                throw new \Exception("Unsupported image format: $mime");
+        }
+
+        if (isset($image)) {
+            imagedestroy($image);
+        }
     }
 
     public function process(Request $request)
@@ -39,7 +81,7 @@ class FootSizerController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'age' => 'required|numeric|min:1',
-            'photo_path' => 'required|image|mimes:jpg,jpeg,png|max:5120',
+            'photo_path' => 'required|image|mimes:jpg,jpeg,png,webp,heic|max:5120',
         ]);
         Log::info('Validation passed. Name: ' . $request->name);
 
@@ -52,9 +94,15 @@ class FootSizerController extends Controller
             $imagePath = storage_path('app/' . $path);
             Log::info('Photo stored at: ' . $imagePath . '. Name: ' . $request->name);
 
+            try {
+                $this->compressImage($imagePath, 60);
+                Log::info("Image compressed successfully. Name: " . $request->name);
+            } catch (\Exception $compressEx) {
+                Log::warning("Image compression skipped or failed: " . $compressEx->getMessage() . '. Name: ' . $request->name);
+            }
+
             // Send image to SIZE APP
             $flaskUrl = rtrim(env('FOOT_MEASURE_API_URL'), '/') . '/measure-foot';
-            // Log::info("Calling SIZE APP: $flaskUrl. Name: " . $request->name);
             Log::info("Calling SIZE APP with URL: $flaskUrl and image: " . basename($imagePath) . '. Name: ' . $request->name);
 
             $response = Http::timeout(15)
