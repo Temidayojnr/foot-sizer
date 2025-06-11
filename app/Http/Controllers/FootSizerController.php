@@ -21,6 +21,18 @@ class FootSizerController extends Controller
     {
         Log::info('Foot size measurement process started.');
 
+        if ($request->hasFile('photo_path')) {
+            $file = $request->file('photo_path');
+
+            Log::info('File uploaded', [
+                'original_name' => $file->getClientOriginalName(),
+                'mime_type' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+            ]);
+        } else {
+            Log::warning('No file uploaded in "photo_path".');
+        }
+
         Log::info('Incoming request data:', $request->all());
 
         // Validate input

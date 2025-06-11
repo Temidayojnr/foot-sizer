@@ -13,7 +13,7 @@
             <h2 class="text-3xl font-extrabold text-sacf_blue text-center">👣 Foot Sizer</h2>
           </div>
 
-        <form id="footForm" method="POST" enctype="multipart/form-data" action="{{ route('foot-sizer.process') }}" class="space-y-6">
+        <form id="footForm" method="POST" action="{{ route('foot-sizer.process') }}" enctype="multipart/form-data" class="space-y-6">
             @csrf
 
             <div>
