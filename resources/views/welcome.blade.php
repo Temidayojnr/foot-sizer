@@ -40,7 +40,7 @@
 
             <div>
                 <label for="photo" class="block text-lg font-medium text-gray-800">Upload Foot Photo (with A4 Sheet)</label>
-                <input type="file" id="photo" name="photo_path" accept="image/*" required
+                <input type="file" id="photo" name="photo_path" accept="image/jpeg,image/png,image/webp" required
                        class="mt-2 block w-full text-sm text-gray-800 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 shadow-sm">
             </div>
 
