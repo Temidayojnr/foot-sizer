@@ -14,14 +14,11 @@ class FootSizerController extends Controller
         return view('welcome');
     }
 
-    private function compressImage($sourcePath, $destinationPath, $quality = 60)
+    private function compressImage($sourcePath, $quality = 60)
     {
         $info = getimagesize($sourcePath);
-        if (!$info) {
-            throw new \Exception("Cannot read image info. File may be corrupted.");
-        }
-
         $mime = $info['mime'];
+        $destinationPath = $sourcePath; // overwrite original file
 
         switch ($mime) {
             case 'image/jpeg':
@@ -32,11 +29,10 @@ class FootSizerController extends Controller
 
             case 'image/png':
                 $image = imagecreatefrompng($sourcePath);
-                // Convert PNG to JPEG with white background to preserve quality
                 $bg = imagecreatetruecolor(imagesx($image), imagesy($image));
                 imagefill($bg, 0, 0, imagecolorallocate($bg, 255, 255, 255));
                 imagecopy($bg, $image, 0, 0, 0, 0, imagesx($image), imagesy($image));
-                imagejpeg($bg, $destinationPath, $quality);
+                imagejpeg($bg, $destinationPath, $quality); // save as jpeg to compress
                 imagedestroy($bg);
                 break;
 
@@ -47,7 +43,7 @@ class FootSizerController extends Controller
 
             case 'image/heic':
             case 'image/heif':
-                throw new \Exception("HEIC/HEIF images are not supported by PHP GD. Please convert to JPG or PNG.");
+                throw new \Exception("HEIC format not supported in PHP GD. Please convert it before uploading.");
                 break;
 
             default:
