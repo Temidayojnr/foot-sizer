@@ -21,6 +21,8 @@ class FootSizerController extends Controller
     {
         Log::info('Foot size measurement process started.');
 
+        dd($request->all());
+
         // Validate input
         $request->validate([
             'name' => 'required|string|max:255',
