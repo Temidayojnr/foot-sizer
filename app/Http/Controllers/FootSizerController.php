@@ -58,6 +58,9 @@ class FootSizerController extends Controller
     public function process(Request $request)
     {
         Log::info('Foot size measurement process started.');
+        Log::info('Content-Type: ' . $request->header('Content-Type'));
+        Log::info('Has file check: ' . ($request->hasFile('photo_path') ? 'yes' : 'no'));
+        Log::info('File in request: ' . ($request->file('photo_path') ? 'exists' : 'null'));
 
         if ($request->hasFile('photo_path')) {
             $file = $request->file('photo_path');
