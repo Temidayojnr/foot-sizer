@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Child;
+use App\Services\FootMeasurementService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
@@ -100,25 +101,17 @@ class FootSizerController extends Controller
                 Log::warning("Image compression skipped or failed: " . $compressEx->getMessage() . '. Name: ' . $request->name);
             }
 
-            // Send image to SIZE APP
-            $flaskUrl = rtrim(env('FOOT_MEASURE_API_URL'), '/') . '/measure-foot';
-            Log::info("Calling SIZE APP with URL: $flaskUrl and image: " . basename($imagePath) . '. Name: ' . $request->name);
-
-            $response = Http::timeout(15)
-                ->attach('image', file_get_contents($imagePath), basename($imagePath))
-                ->post($flaskUrl);
-
-            if (!$response->successful()) {
-                Log::error("SIZE APP failed: " . $response->body() . '. Name: ' . $request->name);
-                throw new \Exception("SIZE APP failed");
-            }
-
-            $data = $response->json();
-            Log::info("SIZE APP response: " . json_encode($data) . '. Name: ' . $request->name);
+            // Measure foot using local PHP service
+            Log::info("Measuring foot locally with image: " . basename($imagePath) . '. Name: ' . $request->name);
+            
+            $measurementService = new FootMeasurementService();
+            $data = $measurementService->measureFoot($imagePath);
+            
+            Log::info("Measurement result: " . json_encode($data) . '. Name: ' . $request->name);
 
             $footSize = $data['foot_size_cm'] ?? null;
             if (!$footSize) {
-                Log::error("No foot size returned from SIZE APP. Name: " . $request->name);
+                Log::error("No foot size returned from measurement service. Name: " . $request->name);
                 throw new \Exception("Foot size not returned");
             }
 
