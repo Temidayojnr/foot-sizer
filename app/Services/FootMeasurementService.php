@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Log;
 class FootMeasurementService
 {
     private const A4_WIDTH_CM = 21.0;
-    private const MIN_CONTOUR_AREA = 1000; // Minimum area to consider a contour
+    private const MIN_CONTOUR_AREA = 5000; // Minimum area to consider a contour (increased for better filtering)
 
     /**
      * Measure foot size from an image containing a foot on A4 paper
@@ -161,20 +161,44 @@ class FootMeasurementService
                 throw new Exception("Failed to load image");
             }
             
+            $originalWidth = imagesx($image);
+            $originalHeight = imagesy($image);
+            
+            // Downscale large images to reduce memory usage and processing time
+            $maxDimension = 1200;
+            $scale = 1.0;
+            
+            if ($originalWidth > $maxDimension || $originalHeight > $maxDimension) {
+                $scale = min($maxDimension / $originalWidth, $maxDimension / $originalHeight);
+                $newWidth = (int)($originalWidth * $scale);
+                $newHeight = (int)($originalHeight * $scale);
+                
+                $resized = imagecreatetruecolor($newWidth, $newHeight);
+                imagecopyresampled($resized, $image, 0, 0, 0, 0, $newWidth, $newHeight, $originalWidth, $originalHeight);
+                imagedestroy($image);
+                $image = $resized;
+                
+                Log::info("GD - Image downscaled from {$originalWidth}x{$originalHeight} to {$newWidth}x{$newHeight}");
+            }
+            
             $width = imagesx($image);
             $height = imagesy($image);
             
-            // Convert to grayscale
+            // Enhanced preprocessing for complex backgrounds
+            // 1. Convert to grayscale
             imagefilter($image, IMG_FILTER_GRAYSCALE);
             
-            // Apply Gaussian blur to reduce noise
+            // 2. Increase contrast to make white paper stand out
+            imagefilter($image, IMG_FILTER_CONTRAST, -20);
+            
+            // 3. Apply blur for noise reduction
             imagefilter($image, IMG_FILTER_GAUSSIAN_BLUR);
             
-            // Edge detection using simple gradient method
-            $edges = $this->detectEdgesGD($image, $width, $height);
+            // Use thresholding instead of edge detection for better object separation
+            $binaryMap = $this->thresholdImage($image, $width, $height);
             
-            // Find contours from edge map
-            $contours = $this->findContoursFromEdgeMap($edges, $width, $height);
+            // Find contours from binary map
+            $contours = $this->extractContours($binaryMap, $width, $height);
             
             imagedestroy($image);
             
@@ -187,29 +211,80 @@ class FootMeasurementService
                 return $b['area'] - $a['area'];
             });
             
-            // Take the two largest contours
-            $contour1 = $contours[0];
-            $contour2 = $contours[1];
+            Log::info("GD - Found " . count($contours) . " contours");
             
-            Log::info("GD - Contour 1 dimensions: {$contour1['width']}x{$contour1['height']}, area: {$contour1['area']}");
-            Log::info("GD - Contour 2 dimensions: {$contour2['width']}x{$contour2['height']}, area: {$contour2['area']}");
+            // Find the A4 paper - it should be a large rectangular contour
+            $a4Contour = null;
+            $footContour = null;
             
-            // Determine which is A4 and which is foot
-            if ($contour1['width'] > $contour2['width']) {
-                $a4Contour = $contour1;
-                $footContour = $contour2;
-            } else {
-                $a4Contour = $contour2;
-                $footContour = $contour1;
+            // Look for A4 paper characteristics:
+            // - Large area (one of the top 5 largest)
+            // - Aspect ratio close to A4 (1.414 for portrait or 0.707 for landscape)
+            // - Rectangular shape
+            $topContours = array_slice($contours, 0, min(10, count($contours)));
+            
+            foreach ($topContours as $index => $contour) {
+                $aspectRatio = $contour['width'] / $contour['height'];
+                $isA4Portrait = abs($aspectRatio - 0.707) < 0.3; // 21/29.7 = 0.707
+                $isA4Landscape = abs($aspectRatio - 1.414) < 0.3; // 29.7/21 = 1.414
+                
+                Log::info("GD - Contour $index: {$contour['width']}x{$contour['height']}, area: {$contour['area']}, aspect: " . round($aspectRatio, 2));
+                
+                if ($isA4Portrait || $isA4Landscape) {
+                    if ($a4Contour === null || $contour['area'] > $a4Contour['area']) {
+                        $a4Contour = $contour;
+                        Log::info("GD - Found potential A4 paper at index $index");
+                    }
+                }
             }
             
-            // Calculate pixels per cm using A4 width
-            $pixelsPerCm = $a4Contour['width'] / self::A4_WIDTH_CM;
+            if (!$a4Contour) {
+                // Fallback: use the largest contour as A4
+                Log::warning("GD - No A4-shaped contour found, using largest contour");
+                $a4Contour = $contours[0];
+            }
             
-            Log::info("GD - A4 width in pixels: {$a4Contour['width']}, Pixels per cm: $pixelsPerCm");
+            // Find foot contour - should be smaller than A4 and within/near A4 bounds
+            foreach ($topContours as $contour) {
+                if ($contour === $a4Contour) {
+                    continue;
+                }
+                
+                // Foot should be smaller than A4
+                if ($contour['area'] < $a4Contour['area'] * 0.8) {
+                    // Check if foot is within or overlapping A4 paper bounds
+                    $isNearA4 = $this->isContourNearA4($contour, $a4Contour);
+                    
+                    if ($isNearA4) {
+                        $footContour = $contour;
+                        Log::info("GD - Found foot contour near A4 paper");
+                        break;
+                    }
+                }
+            }
             
-            // Calculate foot length (use height as length)
-            $footLengthPx = $footContour['height'];
+            if (!$footContour) {
+                // Fallback: use second largest contour
+                Log::warning("GD - No foot contour found near A4, using second largest");
+                $footContour = $contours[1] ?? null;
+                
+                if (!$footContour) {
+                    throw new Exception("Could not identify foot in image. Please ensure foot is clearly visible on A4 paper.");
+                }
+            }
+            
+            Log::info("GD - A4 dimensions: {$a4Contour['width']}x{$a4Contour['height']}, area: {$a4Contour['area']}");
+            Log::info("GD - Foot dimensions: {$footContour['width']}x{$footContour['height']}, area: {$footContour['area']}");
+            
+            // Determine which dimension of A4 to use for calibration
+            // Use the shorter dimension as width (21cm)
+            $a4WidthPx = min($a4Contour['width'], $a4Contour['height']);
+            $pixelsPerCm = $a4WidthPx / self::A4_WIDTH_CM;
+            
+            Log::info("GD - A4 width in pixels: {$a4WidthPx}, Pixels per cm: $pixelsPerCm");
+            
+            // Calculate foot length - use the LONGER dimension of the foot contour
+            $footLengthPx = max($footContour['width'], $footContour['height']);
             $footLengthCm = round($footLengthPx / $pixelsPerCm, 1);
             
             Log::info("GD - Foot length in pixels: $footLengthPx, Foot length in cm: $footLengthCm");
@@ -221,7 +296,12 @@ class FootMeasurementService
             return ['foot_size_cm' => $footLengthCm];
             
         } catch (Exception $e) {
-            throw new Exception("GD processing error: " . $e->getMessage());
+            // Clean up error message
+            $errorMsg = $e->getMessage();
+            if (strpos($errorMsg, 'pattern') !== false || strpos($errorMsg, 'regex') !== false) {
+                throw new Exception("Image processing failed. Please ensure the photo shows a foot clearly placed on white A4 paper.");
+            }
+            throw new Exception("GD processing error: " . $errorMsg);
         }
     }
 
@@ -281,6 +361,51 @@ class FootMeasurementService
     }
 
     /**
+     * Threshold image to create binary map (white objects = 1, dark background = 0)
+     */
+    private function thresholdImage($image, int $width, int $height): array
+    {
+        $binaryMap = [];
+        
+        // Sample pixels to calculate average brightness (faster than scanning all)
+        $sampleStep = max(1, (int)($width / 50)); // Sample every N pixels
+        $totalBrightness = 0;
+        $pixelCount = 0;
+        
+        for ($y = 0; $y < $height; $y += $sampleStep) {
+            for ($x = 0; $x < $width; $x += $sampleStep) {
+                $pixel = imagecolorat($image, $x, $y);
+                $gray = $pixel & 0xFF;
+                $totalBrightness += $gray;
+                $pixelCount++;
+            }
+        }
+        
+        // Use adaptive threshold (slightly above average to detect white paper)
+        $avgBrightness = $totalBrightness / $pixelCount;
+        $threshold = $avgBrightness + 20; // Bias toward detecting bright objects
+        
+        Log::info("GD - Average brightness: " . round($avgBrightness) . ", Threshold: " . round($threshold));
+        
+        // Create binary map - process in chunks to reduce memory usage
+        for ($y = 0; $y < $height; $y++) {
+            $binaryMap[$y] = [];
+            for ($x = 0; $x < $width; $x++) {
+                $pixel = imagecolorat($image, $x, $y);
+                $gray = $pixel & 0xFF;
+                $binaryMap[$y][$x] = $gray > $threshold ? 1 : 0;
+            }
+            
+            // Free memory periodically
+            if ($y % 100 == 0) {
+                gc_collect_cycles();
+            }
+        }
+        
+        return $binaryMap;
+    }
+
+    /**
      * Find contours from edge map
      */
     private function findContoursFromEdgeMap(array $edges, int $width, int $height): array
@@ -311,9 +436,14 @@ class FootMeasurementService
     {
         $visited = [];
         $contours = [];
+        $maxContours = 50; // Limit number of contours to process
         
         for ($y = 0; $y < $height; $y++) {
             for ($x = 0; $x < $width; $x++) {
+                if (count($contours) >= $maxContours) {
+                    break 2; // Exit both loops
+                }
+                
                 if ($binaryMap[$y][$x] === 1 && !isset($visited["$x,$y"])) {
                     $contour = $this->floodFill($binaryMap, $visited, $x, $y, $width, $height);
                     
@@ -338,9 +468,12 @@ class FootMeasurementService
         $minY = $startY;
         $maxY = $startY;
         $area = 0;
+        $maxIterations = 500000; // Prevent infinite loops
+        $iterations = 0;
         
-        while (!empty($stack)) {
+        while (!empty($stack) && $iterations < $maxIterations) {
             [$x, $y] = array_pop($stack);
+            $iterations++;
             
             $key = "$x,$y";
             if (isset($visited[$key]) || $x < 0 || $x >= $width || $y < 0 || $y >= $height) {
@@ -365,6 +498,11 @@ class FootMeasurementService
             $stack[] = [$x - 1, $y];
             $stack[] = [$x, $y + 1];
             $stack[] = [$x, $y - 1];
+            
+            // Periodically free memory
+            if ($iterations % 1000 == 0) {
+                gc_collect_cycles();
+            }
         }
         
         return [
@@ -374,5 +512,23 @@ class FootMeasurementService
             'height' => $maxY - $minY + 1,
             'area' => $area
         ];
+    }
+
+    /**
+     * Check if a contour is near or overlapping with A4 paper contour
+     */
+    private function isContourNearA4(array $contour, array $a4Contour): bool
+    {
+        $footCenterX = $contour['x'] + $contour['width'] / 2;
+        $footCenterY = $contour['y'] + $contour['height'] / 2;
+        
+        // Check if foot center is within A4 bounds (with some margin)
+        $margin = 50; // pixels
+        $isWithinX = $footCenterX >= ($a4Contour['x'] - $margin) && 
+                     $footCenterX <= ($a4Contour['x'] + $a4Contour['width'] + $margin);
+        $isWithinY = $footCenterY >= ($a4Contour['y'] - $margin) && 
+                     $footCenterY <= ($a4Contour['y'] + $a4Contour['height'] + $margin);
+        
+        return $isWithinX && $isWithinY;
     }
 }
