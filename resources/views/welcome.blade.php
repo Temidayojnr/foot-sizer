@@ -19,7 +19,7 @@
             <h2 class="text-4xl font-extrabold text-sacf_blue text-center mb-2">
                 <i class="fas fa-ruler-vertical"></i> Foot Sizer
             </h2>
-            <p class="text-gray-600 text-center text-sm">Measure your child's foot size accurately</p>
+            <p class="text-gray-600 text-center text-sm">Measure your foot size accurately</p>
           </div>
 
         <form id="footForm" method="POST" action="{{ route('foot-sizer.process') }}" enctype="multipart/form-data" class="space-y-6">
@@ -27,15 +27,15 @@
 
             <div>
                 <label for="name" class="block text-lg font-medium text-gray-800">
-                    <i class="fas fa-user text-sacf_blue mr-2"></i>Child's Name
+                    <i class="fas fa-user text-sacf_blue mr-2"></i>Name
                 </label>
-                <input type="text" id="name" name="name" required placeholder="Enter child's full name"
+                <input type="text" id="name" name="name" required placeholder="Enter full name"
                        class="mt-2 block w-full px-5 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-sacf_blue focus:border-sacf_blue text-gray-800 shadow-sm">
             </div>
 
             <div>
                 <label for="age" class="block text-lg font-medium text-gray-800">
-                    <i class="fas fa-birthday-cake text-sacf_pink mr-2"></i>Child's Age
+                    <i class="fas fa-birthday-cake text-sacf_pink mr-2"></i>Age
                 </label>
                 <input type="number" id="age" name="age" required placeholder="Enter age in years"
                        class="mt-2 block w-full px-5 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-sacf_pink focus:border-sacf_pink text-gray-800 shadow-sm">
