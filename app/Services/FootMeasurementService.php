@@ -23,14 +23,21 @@ class FootMeasurementService
             throw new Exception("Image file not found: $imagePath");
         }
 
-        // Check if Imagick is available, otherwise use GD
-        if (extension_loaded('imagick')) {
-            return $this->measureWithImagick($imagePath);
-        } elseif (extension_loaded('gd')) {
-            return $this->measureWithGD($imagePath);
-        } else {
-            throw new Exception("Neither Imagick nor GD extension is available");
+        // Try Imagick first if available, otherwise use GD
+        if (extension_loaded('imagick') && class_exists('Imagick')) {
+            try {
+                return $this->measureWithImagick($imagePath);
+            } catch (Exception $e) {
+                Log::warning("Imagick measurement failed, falling back to GD: " . $e->getMessage());
+                // Fall through to GD
+            }
         }
+        
+        if (extension_loaded('gd')) {
+            return $this->measureWithGD($imagePath);
+        }
+        
+        throw new Exception("Neither Imagick nor GD extension is available");
     }
 
     /**
@@ -38,6 +45,10 @@ class FootMeasurementService
      */
     private function measureWithImagick(string $imagePath): array
     {
+        if (!class_exists('Imagick')) {
+            throw new Exception("Imagick class not available. Please use GD instead.");
+        }
+        
         try {
             $image = new \Imagick($imagePath);
             
